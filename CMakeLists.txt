@@ -5,7 +5,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 add_subdirectory(lib/fmt)
 
-add_executable(convolution src/main.cpp)
+add_executable(convolution src/main.cpp src/auxillary.cpp)
 target_include_directories(convolution PUBLIC include PUBLIC lib/fmt/include)
 target_link_directories(convolution PRIVATE src PRIVATE lib/fmt/src)
 target_link_libraries(convolution fmt)
