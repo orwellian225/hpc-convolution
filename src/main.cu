@@ -1,9 +1,11 @@
 #include <fmt/core.h>
 
 #include <pnm.hpp>
+#include <cuda_runtime.h>
 
 #include "auxillary.hpp"
 #include "serial.hpp"
+#include "global_cuda.hpp"
 
 void test_serial_convolution(ConvolveMask &kernel);
 
@@ -54,8 +56,40 @@ int main(int argc, char **argv) {
 
     // test_serial_convolution(average_kernel);
 
-    PGMRaw serial_convolved_pgm_raw = serial::convolve(raw_pgm, emboss_kernel);
+    fmt::println("First value: {}", raw_pgm.data[516]);
+    PGMRaw serial_convolved_pgm_raw = serial::convolve(raw_pgm, average_kernel);
     pnm::pgm_image serial_convolved_pgm = serial_convolved_pgm_raw.to_pnm();
+
+    PGMRaw *device_raw_pgm;
+    float *temp_data;
+    cudaMalloc(&device_raw_pgm, sizeof(PGMRaw));
+    cudaMalloc(&temp_data, sizeof(float) * raw_pgm.height * raw_pgm.width);
+    cudaMemcpy(&device_raw_pgm->data, &temp_data, sizeof(float) * raw_pgm.height * raw_pgm.width, cudaMemcpyHostToDevice);
+    cudaMemcpy(&device_raw_pgm->height, &raw_pgm.height, sizeof(size_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(&device_raw_pgm->width, &raw_pgm.width, sizeof(size_t), cudaMemcpyHostToDevice);
+
+    PGMRaw host_gc_convolved_pgm_raw, *device_gc_convolved_pgm_raw;
+    host_gc_convolved_pgm_raw.height = raw_pgm.height;
+    host_gc_convolved_pgm_raw.width = raw_pgm.width;
+    host_gc_convolved_pgm_raw.data = new float[raw_pgm.height * raw_pgm.width];
+
+    ConvolveMask *device_kernel;
+    cudaMalloc(&device_kernel, sizeof(ConvolveMask));
+    cudaMemcpy(&device_kernel->height, &average_kernel.height, sizeof(uint32_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(&device_kernel->width, &average_kernel.width, sizeof(uint32_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(&device_kernel->data, &average_kernel.data, sizeof(float) * average_kernel.height * average_kernel.width, cudaMemcpyHostToDevice);
+
+    cudaMalloc(&device_gc_convolved_pgm_raw, sizeof(PGMRaw));
+    cudaMemcpy(&device_gc_convolved_pgm_raw->height, &raw_pgm.height, sizeof(size_t), cudaMemcpyHostToDevice);
+    cudaMemcpy(&device_gc_convolved_pgm_raw->height, &raw_pgm.height, sizeof(size_t), cudaMemcpyHostToDevice);
+
+    // const size_t block_size = 1024; // number of threads
+    // const size_t grid_size = raw_pgm.height * raw_pgm.width / block_size + 1;
+    const size_t block_size = 1;
+    const size_t grid_size = 1;
+    global_cuda::convolve<<<grid_size, block_size>>>(device_raw_pgm, device_kernel, device_gc_convolved_pgm_raw);
+    cudaDeviceSynchronize();
+    cudaMemcpy(&host_gc_convolved_pgm_raw.data, &device_gc_convolved_pgm_raw->data, sizeof(float) * raw_pgm.height * raw_pgm.width, cudaMemcpyDeviceToHost);
 
     fmt::println("Input image");
     fmt::println("\tfilepath:\t\t{}", pgm_infilepath);
@@ -71,6 +105,25 @@ int main(int argc, char **argv) {
     fmt::println("\tData size (bytes):\t{} ", serial_convolved_pgm.width() * pgm.height());
     fmt::println("\tData size (kilobytes):\t{} ", serial_convolved_pgm.width() * serial_convolved_pgm.height() / 1000.);
     fmt::println("\tData size (kibibytes):\t{} ", serial_convolved_pgm.width() * serial_convolved_pgm.height() / 1024.);
+    fmt::println("---------------------------------------");
+
+    bool incorrect_global_cuda_flag = false;
+    for (size_t i = 0; i < serial_convolved_pgm_raw.height * serial_convolved_pgm_raw.width; ++i) {
+        if (serial_convolved_pgm_raw.data[i] != host_gc_convolved_pgm_raw.data[i]) {
+            fmt::println(stderr, "Incorrect global impl: {} != {} @ {}", serial_convolved_pgm_raw.data[i], host_gc_convolved_pgm_raw.data[i], i);
+            incorrect_global_cuda_flag = true;
+            break;
+        }
+    }
+
+    fmt::println("Serial implementation");
+    fmt::println("---------------------------------------");
+
+    fmt::println("Global Memory CUDA implementation");
+    fmt::println("\tCorrect: {}", incorrect_global_cuda_flag ? "No" : "Yes");
+    fmt::println("---------------------------------------");
+
+    fmt::println("Shared Memory CUDA implementation");
     fmt::println("---------------------------------------");
 
     pnm::write_pgm_binary(pgm_outfilepath, serial_convolved_pgm);

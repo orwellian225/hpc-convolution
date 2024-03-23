@@ -1,7 +1,5 @@
 #pragma once
 
-#include <cuda.h>
-
 #include "auxillary.hpp"
 
 namespace global_cuda {
