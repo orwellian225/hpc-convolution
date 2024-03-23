@@ -13,6 +13,6 @@ namespace serial {
      *          PGMRaw convolved_image -- the pgm will have smaller 
      */
 
-    PGMRaw convolve(PGMRaw& image, ConvolveMask& kernel);
+    void convolve(Matrix& image, Matrix& kernel, Matrix& result);
 
 }

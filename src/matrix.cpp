@@ -1,4 +1,5 @@
 #include <stdint.h>
+#include <limits>
 
 #include <cuda_runtime.h>
 
@@ -21,7 +22,7 @@ Matrix::Matrix(uint32_t width, uint32_t height, float initial_value) {
 
     data = new float[size];
     for (size_t i = 0; i < size; ++i)
-        data[i] = 0.;
+        data[i] = initial_value;
 }
 
 Matrix::Matrix(pnm::pgm_image &pgm) {
@@ -40,25 +41,60 @@ Matrix::Matrix(pnm::pgm_image &pgm) {
 pnm::pgm_image Matrix::to_pnm() {
     pnm::pgm_image result(width, height);
 
+    float max = std::numeric_limits<float>::lowest(), min = std::numeric_limits<float>::max();
+    for (size_t i = 0; i < size; ++i) {
+        if (data[i] > max) {
+            max = data[i];
+        } 
+
+        if (data[i] < min) {
+            min = data[i];
+        }
+    }
+
+    // if the range is in [0, 1], then don't normalize
+    if (max <= 1) {
+        max = 1.;
+    }
+    if (min >= 0.) {
+        min = 0.;
+    }
+
     for (size_t i = 0; i < result.width(); ++i) {
         for (size_t j = 0; j < result.height(); ++j) {
-            result[i][j] = (uint8_t)(data[j * height + i] * 255);
+            result[i][j] = (uint8_t)(
+                // (data[j * height + i] * 255)
+                (data[j * height + i] - min) / (max - min) * 255
+            );
         }
     }
 
     return result;
 }
 
+void Matrix::print() {
+    for (size_t i = 0; i < width; ++i) {
+        for (size_t j = 0; j < height; ++j) {
+            fmt::print("{:.2f} ", data[j * height + i]);
+        }
+        fmt::println("");
+    }
+}
+
 bool Matrix::equals(Matrix& other, float margin) {
+    float other_value, this_value;
     for (size_t i = 0; i < other.size; ++i) {
-        if ( abs(other.data[i] - data[i]) > margin )
+        other_value = other.data[i];
+        this_value = this->data[i];
+
+        if ( abs(other_value - this_value) > margin )
             return false;
     }
 
     return true;
 }
 
-static Matrix to_host(Matrix *device_matrix) {
+Matrix Matrix::to_host(Matrix *device_matrix) {
     Matrix host_matrix;
     float *h_data;
 
@@ -82,16 +118,17 @@ static Matrix to_host(Matrix *device_matrix) {
         sizeof(uint32_t), cudaMemcpyDeviceToHost
     ));
 
+    host_matrix.data = new float[host_matrix.size];
     handle_cuda_error(cudaMemcpy(
         host_matrix.data, h_data,
-        device_matrix->size * sizeof(float),
+        host_matrix.size * sizeof(float),
         cudaMemcpyDeviceToHost
     ));
 
     return host_matrix;
 }
 
-static Matrix *to_device(Matrix &host_matrix) {
+Matrix* Matrix::to_device(Matrix &host_matrix) {
     Matrix *device_matrix;
     float *h_data;
 

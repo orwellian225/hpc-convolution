@@ -18,6 +18,8 @@ struct Matrix {
 
     bool equals(Matrix& other, float margin);
 
+    void print();
+
     static Matrix to_host(Matrix *device_matrix);
     static Matrix* to_device(Matrix &host_matrix);
 
