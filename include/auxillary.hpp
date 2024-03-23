@@ -31,4 +31,5 @@ struct ConvolveMask {
     ~ConvolveMask();
 };
 
+
 void handle_cuda_error(cudaError_t error);
