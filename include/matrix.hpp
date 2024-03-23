@@ -23,5 +23,7 @@ struct Matrix {
     static Matrix to_host(Matrix *device_matrix);
     static Matrix* to_device(Matrix &host_matrix);
 
+    void operator=(const Matrix& other);
+
     ~Matrix();
 };

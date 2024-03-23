@@ -99,11 +99,6 @@ Matrix Matrix::to_host(Matrix *device_matrix) {
     float *h_data;
 
     handle_cuda_error(cudaMemcpy(
-        &h_data, &device_matrix->data,
-        sizeof(float*), cudaMemcpyDeviceToHost
-    ));
-
-    handle_cuda_error(cudaMemcpy(
         &host_matrix.width, &device_matrix->width,
         sizeof(uint32_t), cudaMemcpyDeviceToHost
     ));
@@ -116,6 +111,11 @@ Matrix Matrix::to_host(Matrix *device_matrix) {
     handle_cuda_error(cudaMemcpy(
         &host_matrix.size, &device_matrix->size,
         sizeof(uint32_t), cudaMemcpyDeviceToHost
+    ));
+
+    handle_cuda_error(cudaMemcpy(
+        &h_data, &device_matrix->data,
+        sizeof(float*), cudaMemcpyDeviceToHost
     ));
 
     host_matrix.data = new float[host_matrix.size];
@@ -151,6 +151,11 @@ Matrix* Matrix::to_device(Matrix &host_matrix) {
     ));
 
     handle_cuda_error(cudaMemcpy(
+        h_data, host_matrix.data,
+        host_matrix.size * sizeof(float), cudaMemcpyHostToDevice
+    ));
+
+    handle_cuda_error(cudaMemcpy(
         &device_matrix->data, &h_data,
         sizeof(float*), cudaMemcpyHostToDevice
     ));
@@ -158,7 +163,11 @@ Matrix* Matrix::to_device(Matrix &host_matrix) {
     return device_matrix;
 }
 
-Matrix::~Matrix() {
-    if (data != nullptr)
-        delete[] data;
+void Matrix::operator=(const Matrix& other) {
+    width = other.width;
+    height = other.height;
+    size = other.size;
+    data = other.data;
 }
+
+Matrix::~Matrix() {}
