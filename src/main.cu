@@ -1,5 +1,6 @@
-#include <fmt/core.h>
+#include <chrono>
 
+#include <fmt/core.h>
 #include <pnm.hpp>
 #include <cuda_runtime.h>
 
@@ -22,7 +23,7 @@ int main(int argc, char **argv) {
     fmt::println("COMS4040A High Performance Computing Assignment 1");
     fmt::println("Brendan Griffiths - 2426285");
     fmt::println("Convolution on Portable Gray Map images");
-    fmt::println("---------------------------------------");
+    fmt::println("{:-<80}", "-");
 
     if (argc != 3) {
         fmt::println(stderr, "Incorrect arguments - please specify a pgm image to load, and a resultant pgm file");
@@ -63,7 +64,11 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < 25; ++i)
         sum_kernel.data[i] = 1.0;
 
-    PGMRaw serial_convolved_pgm_raw = serial::convolve(raw_pgm, average_kernel);
+    auto serial_start = std::chrono::high_resolution_clock::now();
+        PGMRaw serial_convolved_pgm_raw = serial::convolve(raw_pgm, average_kernel);
+    auto serial_end = std::chrono::high_resolution_clock::now();
+    float serial_duration_ms = std::chrono::duration_cast<std::chrono::microseconds>(serial_end - serial_start).count() / 1000;
+
     pnm::pgm_image serial_convolved_pgm = serial_convolved_pgm_raw.to_pnm();
 
     float *h_data;
@@ -98,8 +103,17 @@ int main(int argc, char **argv) {
 
     const size_t block_size = raw_pgm.height * raw_pgm.width < 1024 ? raw_pgm.height * raw_pgm.width : 1024; // number of threads
     const size_t grid_size = raw_pgm.height * raw_pgm.width / block_size + 1;
-    global_cuda::convolve<<<grid_size, block_size>>>(d_raw_pgm, d_kernel, d_gc_convolved_pgm);
-    cudaDeviceSynchronize();
+
+    cudaEvent_t global_start, global_end;
+    cudaEventCreate(&global_start); cudaEventCreate(&global_end);
+
+    cudaEventRecord(global_start, 0);
+        global_cuda::convolve<<<grid_size, block_size>>>(d_raw_pgm, d_kernel, d_gc_convolved_pgm);
+    cudaEventRecord(global_end, 0);
+
+    cudaEventSynchronize(global_end);
+    float global_duration_ms = 0;
+    cudaEventElapsedTime(&global_duration_ms, global_start, global_end);
 
     float *h_data_ptr;
     handle_cuda_error(cudaMemcpy(&h_data_ptr, &d_gc_convolved_pgm->data, sizeof(float*), cudaMemcpyDeviceToHost));
@@ -107,21 +121,20 @@ int main(int argc, char **argv) {
 
     pnm::pgm_image global_convolved_pgm = h_global_pgm_raw.to_pnm();
 
-    fmt::println("Input image");
-    fmt::println("\tfilepath:\t\t{}", pgm_infilepath);
-    fmt::println("\tdimensions:\t\t{} x {}", pgm.width(), pgm.height());
-    fmt::println("\tData size (bytes):\t{} ", pgm.width() * pgm.height());
-    fmt::println("\tData size (kilobytes):\t{} ", pgm.width() * pgm.height() / 1000.);
-    fmt::println("\tData size (kibibytes):\t{} ", pgm.width() * pgm.height() / 1024.);
-    fmt::println("---------------------------------------");
+    std::string serial_pgm_out_filepath = fmt::format("{}_serial.pgm", pgm_outfilepath);
+    std::string global_pgm_out_filepath = fmt::format("{}_global.pgm", pgm_outfilepath);
+    std::string shared_pgm_out_filepath = fmt::format("{}_shared.pgm", pgm_outfilepath);
 
-    fmt::println("Output image");
-    fmt::println("\tfilepath:\t\t{}", pgm_outfilepath);
-    fmt::println("\tdimensions:\t\t{} x {}", serial_convolved_pgm.width(), serial_convolved_pgm.height());
-    fmt::println("\tData size (bytes):\t{} ", serial_convolved_pgm.width() * pgm.height());
-    fmt::println("\tData size (kilobytes):\t{} ", serial_convolved_pgm.width() * serial_convolved_pgm.height() / 1000.);
-    fmt::println("\tData size (kibibytes):\t{} ", serial_convolved_pgm.width() * serial_convolved_pgm.height() / 1024.);
-    fmt::println("---------------------------------------");
+    fmt::println("Image Properties");
+    fmt::println("\t{:<32} {}", "Input Filepath:", pgm_infilepath);
+    fmt::println("\t{:<32} {}", "Serial output filepath:", serial_pgm_out_filepath);
+    fmt::println("\t{:<32} {}", "Global output filepath:", global_pgm_out_filepath);
+    fmt::println("\t{:<32} {}", "Shared output filepath:", shared_pgm_out_filepath);
+    fmt::println("\t{:<32} {} x {}", "Dimensions:", pgm.width(), pgm.height());
+    fmt::println("\t{:<32} {:<10}", "Data size (bytes):", pgm.width() * pgm.height());
+    fmt::println("\t{:<32} {:<10.3f}", "Data size (kilobytes / kB):", pgm.width() * pgm.height() / 1000.0);
+    fmt::println("\t{:<32} {:<10.3f}", "Data size (kibibytes / kiB):", pgm.width() * pgm.height() / 1024.0);
+    fmt::println("{:-<80}", "-");
 
     bool correct_global_mem_impl = true;
     for (size_t i = 0; i < serial_convolved_pgm_raw.height * serial_convolved_pgm_raw.width; ++i) {
@@ -132,18 +145,25 @@ int main(int argc, char **argv) {
     }
 
     fmt::println("Serial implementation");
-    fmt::println("---------------------------------------");
+    fmt::println("\t{:<32} {}", "Execution Time (ms):", serial_duration_ms);
+    fmt::println("\t{:<32} {}", "Throughput (kB/s):", (num_elements / 1000) / (serial_duration_ms / 1000));
+    fmt::println("\t{:<32} {}", "Throughput (kiB/s):", (num_elements / 1024) / (serial_duration_ms / 1000));
+    fmt::println("{:-<80}", "-");
 
     fmt::println("Global Memory CUDA implementation");
-    fmt::println("\tCorrect: {}", correct_global_mem_impl ? "Yes" : "No");
-    fmt::println("---------------------------------------");
+    fmt::println("\t{:<32} {}", "Execution Time (ms):", global_duration_ms);
+    fmt::println("\t{:<32} {}", "Throughput (kB/s):", (num_elements / 1000) / (global_duration_ms / 1000));
+    fmt::println("\t{:<32} {}", "Throughput (kiB/s):", (num_elements / 1024) / (global_duration_ms / 1000));
+    fmt::println("\t{:<32} {}", "Speedup:", serial_duration_ms / global_duration_ms);
+    fmt::println("\t{:<32} {}", "Correct:", correct_global_mem_impl ? "Yes" : "No");
+    fmt::println("{:-<80}", "-");
 
     fmt::println("Shared Memory CUDA implementation");
-    fmt::println("---------------------------------------");
+    fmt::println("{:-<80}", "-");
 
 
-    pnm::write_pgm_binary(fmt::format("{}_serial.pgm", pgm_outfilepath), serial_convolved_pgm);
-    pnm::write_pgm_binary(fmt::format("{}_global.pgm", pgm_outfilepath), global_convolved_pgm);
+    pnm::write_pgm_binary(serial_pgm_out_filepath, serial_convolved_pgm);
+    pnm::write_pgm_binary(global_pgm_out_filepath, global_convolved_pgm);
 
     return 0;
 }
