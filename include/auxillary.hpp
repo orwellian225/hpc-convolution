@@ -1,8 +1,11 @@
 #pragma once
 
 #include <stdint.h>
+#include <stdlib.h>
+#include <cuda_runtime.h>
 
 #include <pnm.hpp>
+#include <fmt/core.h>
 
 struct PGMRaw {
     uint32_t width;
@@ -27,3 +30,5 @@ struct ConvolveMask {
     ConvolveMask(uint32_t width, uint32_t height);
     ~ConvolveMask();
 };
+
+void handle_cuda_error(cudaError_t error);

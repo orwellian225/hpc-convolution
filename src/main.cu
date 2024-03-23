@@ -9,6 +9,15 @@
 
 void test_serial_convolution(ConvolveMask &kernel);
 
+__global__ void observe_data(PGMRaw* data) {
+    size_t image_idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (image_idx > data->height * data->width)
+        return;
+
+    data->data[image_idx] = 0.0;
+}
+
 int main(int argc, char **argv) {
     fmt::println("COMS4040A High Performance Computing Assignment 1");
     fmt::println("Brendan Griffiths - 2426285");
@@ -54,42 +63,49 @@ int main(int argc, char **argv) {
     for (size_t i = 0; i < 25; ++i)
         sum_kernel.data[i] = 1.0;
 
-    // test_serial_convolution(average_kernel);
-
-    fmt::println("First value: {}", raw_pgm.data[516]);
     PGMRaw serial_convolved_pgm_raw = serial::convolve(raw_pgm, average_kernel);
     pnm::pgm_image serial_convolved_pgm = serial_convolved_pgm_raw.to_pnm();
 
-    PGMRaw *device_raw_pgm;
-    float *temp_data;
-    cudaMalloc(&device_raw_pgm, sizeof(PGMRaw));
-    cudaMalloc(&temp_data, sizeof(float) * raw_pgm.height * raw_pgm.width);
-    cudaMemcpy(&device_raw_pgm->data, &temp_data, sizeof(float) * raw_pgm.height * raw_pgm.width, cudaMemcpyHostToDevice);
-    cudaMemcpy(&device_raw_pgm->height, &raw_pgm.height, sizeof(size_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(&device_raw_pgm->width, &raw_pgm.width, sizeof(size_t), cudaMemcpyHostToDevice);
+    float *h_data;
 
-    PGMRaw host_gc_convolved_pgm_raw, *device_gc_convolved_pgm_raw;
-    host_gc_convolved_pgm_raw.height = raw_pgm.height;
-    host_gc_convolved_pgm_raw.width = raw_pgm.width;
-    host_gc_convolved_pgm_raw.data = new float[raw_pgm.height * raw_pgm.width];
+    const size_t num_elements = raw_pgm.height * raw_pgm.width;
+    const size_t num_bytes = num_elements * sizeof(float);
+    PGMRaw h_global_pgm_raw(raw_pgm.height, raw_pgm.width);
+    h_global_pgm_raw.data = new float[num_elements];
 
-    ConvolveMask *device_kernel;
-    cudaMalloc(&device_kernel, sizeof(ConvolveMask));
-    cudaMemcpy(&device_kernel->height, &average_kernel.height, sizeof(uint32_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(&device_kernel->width, &average_kernel.width, sizeof(uint32_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(&device_kernel->data, &average_kernel.data, sizeof(float) * average_kernel.height * average_kernel.width, cudaMemcpyHostToDevice);
+    PGMRaw *d_raw_pgm;
+    handle_cuda_error(cudaMalloc(&d_raw_pgm, sizeof(PGMRaw)));
+    handle_cuda_error(cudaMalloc(&h_data, num_bytes));
+    handle_cuda_error(cudaMemcpy(h_data, raw_pgm.data, num_bytes, cudaMemcpyHostToDevice));
+    handle_cuda_error(cudaMemcpy(&d_raw_pgm->height, &raw_pgm.height, sizeof(size_t), cudaMemcpyHostToDevice));
+    handle_cuda_error(cudaMemcpy(&d_raw_pgm->width, &raw_pgm.width, sizeof(size_t), cudaMemcpyHostToDevice));
+    handle_cuda_error(cudaMemcpy(&d_raw_pgm->data, &h_data, sizeof(float*), cudaMemcpyHostToDevice));
 
-    cudaMalloc(&device_gc_convolved_pgm_raw, sizeof(PGMRaw));
-    cudaMemcpy(&device_gc_convolved_pgm_raw->height, &raw_pgm.height, sizeof(size_t), cudaMemcpyHostToDevice);
-    cudaMemcpy(&device_gc_convolved_pgm_raw->height, &raw_pgm.height, sizeof(size_t), cudaMemcpyHostToDevice);
+    ConvolveMask *d_kernel;
+    handle_cuda_error(cudaMalloc(&d_kernel, sizeof(ConvolveMask)));
+    handle_cuda_error(cudaMalloc(&h_data, sizeof(float) * average_kernel.width * average_kernel.height));
+    handle_cuda_error(cudaMemcpy(h_data, average_kernel.data, sizeof(float) * average_kernel.width * average_kernel.height, cudaMemcpyHostToDevice));
+    handle_cuda_error(cudaMemcpy(&d_kernel->height, &average_kernel.height, sizeof(size_t), cudaMemcpyHostToDevice));
+    handle_cuda_error(cudaMemcpy(&d_kernel->width, &average_kernel.width, sizeof(size_t), cudaMemcpyHostToDevice));
+    handle_cuda_error(cudaMemcpy(&d_kernel->data, &h_data, sizeof(float*), cudaMemcpyHostToDevice));
 
-    // const size_t block_size = 1024; // number of threads
-    // const size_t grid_size = raw_pgm.height * raw_pgm.width / block_size + 1;
-    const size_t block_size = 1;
-    const size_t grid_size = 1;
-    global_cuda::convolve<<<grid_size, block_size>>>(device_raw_pgm, device_kernel, device_gc_convolved_pgm_raw);
+    PGMRaw *d_gc_convolved_pgm;
+    handle_cuda_error(cudaMalloc(&d_gc_convolved_pgm, sizeof(PGMRaw)));
+    handle_cuda_error(cudaMalloc(&h_data, num_bytes));
+    handle_cuda_error(cudaMemcpy(&d_gc_convolved_pgm->height, &raw_pgm.height, sizeof(size_t), cudaMemcpyHostToDevice));
+    handle_cuda_error(cudaMemcpy(&d_gc_convolved_pgm->width, &raw_pgm.width, sizeof(size_t), cudaMemcpyHostToDevice));
+    handle_cuda_error(cudaMemcpy(&d_gc_convolved_pgm->data, &h_data, sizeof(float*), cudaMemcpyHostToDevice));
+
+    const size_t block_size = raw_pgm.height * raw_pgm.width < 1024 ? raw_pgm.height * raw_pgm.width : 1024; // number of threads
+    const size_t grid_size = raw_pgm.height * raw_pgm.width / block_size + 1;
+    global_cuda::convolve<<<grid_size, block_size>>>(d_raw_pgm, d_kernel, d_gc_convolved_pgm);
     cudaDeviceSynchronize();
-    cudaMemcpy(&host_gc_convolved_pgm_raw.data, &device_gc_convolved_pgm_raw->data, sizeof(float) * raw_pgm.height * raw_pgm.width, cudaMemcpyDeviceToHost);
+
+    float *h_data_ptr;
+    handle_cuda_error(cudaMemcpy(&h_data_ptr, &d_gc_convolved_pgm->data, sizeof(float*), cudaMemcpyDeviceToHost));
+    handle_cuda_error(cudaMemcpy(h_global_pgm_raw.data, h_data_ptr, num_bytes, cudaMemcpyDeviceToHost));
+
+    pnm::pgm_image global_convolved_pgm = h_global_pgm_raw.to_pnm();
 
     fmt::println("Input image");
     fmt::println("\tfilepath:\t\t{}", pgm_infilepath);
@@ -107,12 +123,11 @@ int main(int argc, char **argv) {
     fmt::println("\tData size (kibibytes):\t{} ", serial_convolved_pgm.width() * serial_convolved_pgm.height() / 1024.);
     fmt::println("---------------------------------------");
 
-    bool incorrect_global_cuda_flag = false;
+    bool correct_global_mem_impl = true;
     for (size_t i = 0; i < serial_convolved_pgm_raw.height * serial_convolved_pgm_raw.width; ++i) {
-        if (serial_convolved_pgm_raw.data[i] != host_gc_convolved_pgm_raw.data[i]) {
-            fmt::println(stderr, "Incorrect global impl: {} != {} @ {}", serial_convolved_pgm_raw.data[i], host_gc_convolved_pgm_raw.data[i], i);
-            incorrect_global_cuda_flag = true;
-            break;
+        if (abs(serial_convolved_pgm_raw.data[i] - h_global_pgm_raw.data[i]) > 0.001) {
+            fmt::println(stderr, "Incorrect GC: {} != {} by 1e-3 @ {}", serial_convolved_pgm_raw.data[i], h_global_pgm_raw.data[i], i);
+            correct_global_mem_impl = false;
         }
     }
 
@@ -120,13 +135,15 @@ int main(int argc, char **argv) {
     fmt::println("---------------------------------------");
 
     fmt::println("Global Memory CUDA implementation");
-    fmt::println("\tCorrect: {}", incorrect_global_cuda_flag ? "No" : "Yes");
+    fmt::println("\tCorrect: {}", correct_global_mem_impl ? "Yes" : "No");
     fmt::println("---------------------------------------");
 
     fmt::println("Shared Memory CUDA implementation");
     fmt::println("---------------------------------------");
 
-    pnm::write_pgm_binary(pgm_outfilepath, serial_convolved_pgm);
+
+    pnm::write_pgm_binary(fmt::format("{}_serial.pgm", pgm_outfilepath), serial_convolved_pgm);
+    pnm::write_pgm_binary(fmt::format("{}_global.pgm", pgm_outfilepath), global_convolved_pgm);
 
     return 0;
 }

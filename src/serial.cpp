@@ -26,7 +26,6 @@ PGMRaw serial::convolve(PGMRaw& image, ConvolveMask& kernel) {
                     size_t kernel_idx = (kernel_j + kernel.height / 2) * kernel.height + (kernel_i + kernel.width / 2);
                     float image_val;
 
-
                     if ( -1 < kernel_image_i && kernel_image_i < image.width && -1 < kernel_image_j && kernel_image_j < image.height )
                         image_val = image.data[kernel_image_idx];
                     else

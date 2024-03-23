@@ -1,5 +1,7 @@
 #include <pnm.hpp>
 
+#include <cuda_runtime.h>
+
 #include "auxillary.hpp"
 
 PGMRaw::PGMRaw() {
@@ -58,4 +60,14 @@ ConvolveMask::ConvolveMask(uint32_t width, uint32_t height) {
 ConvolveMask::~ConvolveMask() {
     if (data != nullptr)
         delete[] data;
+}
+
+void handle_cuda_error(cudaError_t error) {
+    if (error == cudaSuccess)
+        return;
+    
+    fmt::println(stderr, "CUDA Error:");
+    fmt::println(stderr, "\t{}", cudaGetErrorString(error));
+    cudaDeviceReset();
+    exit(EXIT_FAILURE);
 }
