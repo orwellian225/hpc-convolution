@@ -56,9 +56,9 @@ int main(int argc, char **argv) {
 
     pnm::pgm_image pgm = pnm::read_pgm_binary(pgm_infilepath);
 
-    std::string serial_pgm_out_filepath = fmt::format("{}_serial.pgm", pgm_outfilepath);
-    std::string global_pgm_out_filepath = fmt::format("{}_global.pgm", pgm_outfilepath);
-    std::string shared_pgm_out_filepath = fmt::format("{}_shared.pgm", pgm_outfilepath);
+    std::string serial_pgm_out_filepath = fmt::format("{}_{}_serial.pgm", pgm_outfilepath, available_kernel_names[selected_kernel]);
+    std::string global_pgm_out_filepath = fmt::format("{}_{}_global.pgm", pgm_outfilepath, available_kernel_names[selected_kernel]);
+    std::string shared_pgm_out_filepath = fmt::format("{}_{}_shared.pgm", pgm_outfilepath, available_kernel_names[selected_kernel]);
 
     const size_t num_elements = pgm.height() * pgm.width();
     const uint32_t img_width = pgm.width(), img_height = pgm.height(); 
@@ -144,43 +144,43 @@ int main(int argc, char **argv) {
     fmt::println("| {:<24} | {:<19} | {:<24} | {:<23} | {:<25} | {:<24} | {:<7} | {:<7} |", 
         "Algorithm", 
         "Execution Time (ms)", 
-        "Image Throughput (kiB/s)", 
-        "Image Throughput (kB/s)", 
-        "Matrix Throughput (kiB/s)",
-        "Matrix Throughput (kB/s)",
+        "Image Throughput (MiB/s)", 
+        "Image Throughput (MB/s)", 
+        "Matrix Throughput (MiB/s)",
+        "Matrix Throughput (MB/s)",
         "Speedup",
         "Correct"
     );
     fmt::println("{:-<178}", "-");
 
-    fmt::println("| {:<24} | {:^19.5f} | {:^24.2f} | {:^23.2f} | {:^25.2f} | {:^24.2f} | {:^7} | {:^7} |", 
+    fmt::println("| {:<24} | {:^19.5f} | {:^24.4f} | {:^23.4f} | {:^25.4f} | {:^24.4f} | {:^7} | {:^7} |", 
         "Serial", 
         serial_duration_ms,
-        (num_image_bytes / 1024.) / (serial_duration_ms / 1000.),
-        (num_image_bytes / 1000.) / (serial_duration_ms / 1000.),
-        (num_float_bytes / 1024.) / (serial_duration_ms / 1000.),
-        (num_float_bytes / 1000.) / (serial_duration_ms / 1000.),
+        (num_image_bytes / 1024. / 1024.) / (serial_duration_ms / 1000.),
+        (num_image_bytes / 1000. / 1000.) / (serial_duration_ms / 1000.),
+        (num_float_bytes / 1024. / 1024.) / (serial_duration_ms / 1000.),
+        (num_float_bytes / 1000. / 1000.) / (serial_duration_ms / 1000.),
         "/",
         "/"
     );
 
-    fmt::println("| {:<24} | {:^19.5f} | {:^24.2f} | {:^23.2f} | {:^25.2f} | {:^24.2f} | {:^7.2f} | {:^7} |", 
+    fmt::println("| {:<24} | {:^19.5f} | {:^24.4f} | {:^23.4f} | {:^25.4f} | {:^24.4f} | {:^7.4f} | {:^7} |", 
         "Global Memory CUDA", 
         globalmem_duration_ms,
-        (num_image_bytes / 1024.) / (globalmem_duration_ms / 1000.),
-        (num_image_bytes / 1000.) / (globalmem_duration_ms / 1000.),
-        (num_float_bytes / 1024.) / (globalmem_duration_ms / 1000.),
-        (num_float_bytes / 1000.) / (globalmem_duration_ms / 1000.),
+        (num_image_bytes / 1024. / 1024.) / (globalmem_duration_ms / 1000.),
+        (num_image_bytes / 1000. / 1000.) / (globalmem_duration_ms / 1000.),
+        (num_float_bytes / 1024. / 1024.) / (globalmem_duration_ms / 1000.),
+        (num_float_bytes / 1000. / 1000.) / (globalmem_duration_ms / 1000.),
         serial_duration_ms / globalmem_duration_ms,
         globalmem_correct ? "Yes" : "No"
     );
-    fmt::println("| {:<24} | {:^19.5f} | {:^24.2f} | {:^23.2f} | {:^25.2f} | {:^24.2f} | {:^7.2f} | {:^7} |", 
+    fmt::println("| {:<24} | {:^19.5f} | {:^24.4f} | {:^23.4f} | {:^25.4f} | {:^24.4f} | {:^7.4f} | {:^7} |", 
         "Shared Memory CUDA", 
         sharedmem_duration_ms,
-        (num_image_bytes / 1024.) / (sharedmem_duration_ms / 1000.),
-        (num_image_bytes / 1000.) / (sharedmem_duration_ms / 1000.),
-        (num_float_bytes / 1024.) / (sharedmem_duration_ms / 1000.),
-        (num_float_bytes / 1000.) / (sharedmem_duration_ms / 1000.),
+        (num_image_bytes / 1024. / 1024.) / (sharedmem_duration_ms / 1000.),
+        (num_image_bytes / 1000. / 1000.) / (sharedmem_duration_ms / 1000.),
+        (num_float_bytes / 1024. / 1024.) / (sharedmem_duration_ms / 1000.),
+        (num_float_bytes / 1000. / 1000.) / (sharedmem_duration_ms / 1000.),
         serial_duration_ms / sharedmem_duration_ms,
         sharedmem_correct ? "Yes" : "No"
     );
@@ -193,9 +193,11 @@ int main(int argc, char **argv) {
 
     pnm::pgm_image serial_pgm = serial_convolved_matrix.to_pnm();
     pnm::pgm_image globalmem_pgm = globalmem_convolved_matrix.to_pnm();
+    pnm::pgm_image sharedmem_pgm = sharedmem_convolved_matrix.to_pnm();
 
     pnm::write_pgm_binary(serial_pgm_out_filepath, serial_pgm);
     pnm::write_pgm_binary(global_pgm_out_filepath, globalmem_pgm);
+    pnm::write_pgm_binary(shared_pgm_out_filepath, sharedmem_pgm);
 
     return 0;
 }
