@@ -8,7 +8,7 @@ add_subdirectory(lib/fmt)
 add_executable(convolution 
     src/main.cu src/auxillary.cpp 
     src/matrix.cpp
-    src/serial.cpp src/global_cuda.cu src/sharedmem.cu
+    src/serial.cpp src/globalmem.cu src/sharedmem.cu
 )
 
 target_include_directories(convolution PUBLIC include PUBLIC lib/fmt/include)

@@ -7,7 +7,7 @@
 #include "auxillary.hpp"
 #include "matrix.hpp"
 #include "serial.hpp"
-#include "global_cuda.hpp"
+#include "globalmem.hpp"
 #include "sharedmem.hpp"
 
 void test_serial_convolution(ConvolveMask &kernel);

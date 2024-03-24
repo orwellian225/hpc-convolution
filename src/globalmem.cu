@@ -2,7 +2,7 @@
 #include <fmt/core.h>
 
 #include "matrix.hpp"
-#include "global_cuda.hpp"
+#include "globalmem.hpp"
 
 __global__ void globalmem::convolve(Matrix *image, Matrix *kernel, Matrix *result) {
     size_t image_idx = blockIdx.x * blockDim.x + threadIdx.x;
