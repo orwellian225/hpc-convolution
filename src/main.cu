@@ -117,7 +117,7 @@ int main(int argc, char **argv) {
     cudaEventCreate(&globalmem_start);
     cudaEventCreate(&globalmem_end);
     cudaEventRecord(globalmem_start, 0);
-        global_cuda::convolve<<<grid_size, block_size>>>(d_image_matrix, d_kernel, d_globalmem_matrix);
+        globalmem::convolve<<<grid_size, block_size>>>(d_image_matrix, d_kernel, d_globalmem_matrix);
     cudaEventRecord(globalmem_end, 0);
     cudaEventSynchronize(globalmem_end);
     globalmem_convolved_matrix = Matrix::to_host(d_globalmem_matrix);

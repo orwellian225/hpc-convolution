@@ -2,6 +2,6 @@
 
 #include "matrix.hpp"
 
-namespace global_cuda {
+namespace globalmem {
     __global__ void convolve(Matrix *image, Matrix *kernel, Matrix *result);
 }

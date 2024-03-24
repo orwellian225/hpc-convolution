@@ -4,7 +4,7 @@
 #include "matrix.hpp"
 #include "global_cuda.hpp"
 
-__global__ void global_cuda::convolve(Matrix *image, Matrix *kernel, Matrix *result) {
+__global__ void globalmem::convolve(Matrix *image, Matrix *kernel, Matrix *result) {
     size_t image_idx = blockIdx.x * blockDim.x + threadIdx.x;
     if (image_idx >= image->size)
         return;
