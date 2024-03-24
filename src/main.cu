@@ -8,6 +8,7 @@
 #include "matrix.hpp"
 #include "serial.hpp"
 #include "global_cuda.hpp"
+#include "sharedmem.hpp"
 
 void test_serial_convolution(ConvolveMask &kernel);
 
@@ -91,7 +92,14 @@ int main(int argc, char **argv) {
 
     Matrix kernel = available_kernels[selected_kernel];
 
-    const size_t block_size = 1024;
+    size_t block_size = 1024;
+    if (img_width < 1024) {
+        if (img_width % 32 == 0)
+            block_size = img_width;
+        else
+            block_size = (img_width / 32) * 32 + 32;
+    }
+
     const size_t grid_size = num_elements / block_size + 1;
     float serial_duration_ms = 0., globalmem_duration_ms = 0., sharedmem_duration_ms = 0.;
 
@@ -115,9 +123,19 @@ int main(int argc, char **argv) {
     globalmem_convolved_matrix = Matrix::to_host(d_globalmem_matrix);
     cudaEventElapsedTime(&globalmem_duration_ms, globalmem_start, globalmem_end);
 
+    // Each row is one block (block_size)
+    // each row has kernel height rows needed 
+    // we need extra columns around ends of row for overlapping data this is kernel width / 2 cells each side per row
+    size_t shared_mem_size = sizeof(float) * (block_size * kernel.height + (kernel.width - 1) * kernel.height);
     cudaEvent_t sharedmem_start, sharedmem_end;    
     cudaEventCreate(&sharedmem_start);
     cudaEventCreate(&sharedmem_end);
+    cudaEventRecord(sharedmem_start, 0);
+        sharedmem::convolve<<<grid_size, block_size, shared_mem_size>>>(d_image_matrix, d_kernel, d_sharedmem_matrix);
+    cudaEventRecord(sharedmem_end, 0);
+    cudaEventSynchronize(sharedmem_end);
+    sharedmem_convolved_matrix = Matrix::to_host(d_sharedmem_matrix);
+    cudaEventElapsedTime(&sharedmem_duration_ms, sharedmem_start, sharedmem_end);
 
     bool globalmem_correct = serial_convolved_matrix.equals(globalmem_convolved_matrix, 0.001);
     bool sharedmem_correct = serial_convolved_matrix.equals(sharedmem_convolved_matrix, 0.001);
@@ -167,6 +185,11 @@ int main(int argc, char **argv) {
         sharedmem_correct ? "Yes" : "No"
     );
     fmt::println("{:-<178}", "-");
+
+    // image_matrix.print(); fmt::println("");
+    // serial_convolved_matrix.print(); fmt::println("");
+    // globalmem_convolved_matrix.print(); fmt::println("");
+    // sharedmem_convolved_matrix.print(); fmt::println("");
 
     pnm::pgm_image serial_pgm = serial_convolved_matrix.to_pnm();
     pnm::pgm_image globalmem_pgm = globalmem_convolved_matrix.to_pnm();

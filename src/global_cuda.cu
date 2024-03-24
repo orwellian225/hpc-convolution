@@ -26,4 +26,5 @@ __global__ void global_cuda::convolve(Matrix *image, Matrix *kernel, Matrix *res
                 result->data[image_idx] += image->data[kernel_image_idx] * kernel->data[kernel_idx];
         }
     }
+
 }
