@@ -75,7 +75,7 @@ pnm::pgm_image Matrix::to_pnm() {
 void Matrix::print() {
     for (size_t i = 0; i < width; ++i) {
         for (size_t j = 0; j < height; ++j) {
-            fmt::print("{:.2f} ", data[j * height + i]);
+            fmt::print("{:+.2f} ", data[j * height + i]);
         }
         fmt::println("");
     }

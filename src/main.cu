@@ -26,13 +26,32 @@ int main(int argc, char **argv) {
     fmt::println("Convolution on Portable Gray Map images");
     fmt::println("{:-<80}", "-");
 
-    if (argc != 3) {
-        fmt::println(stderr, "Incorrect arguments - please specify a pgm image to load, and a resultant pgm file");
+    if (argc != 4) {
+        fmt::println(stderr, "Incorrect arguments - please specify a pgm image to load, a resultant pgm file and the convolution kernel");
         return -1;
     }
 
     std::string pgm_infilepath(argv[1]);
     std::string pgm_outfilepath(argv[2]);
+    uint8_t selected_kernel = atoi(argv[3]) - 1;
+
+    const std::array<std::string, 3> available_kernel_names({
+        "Average", "Sharpen", "Emboss"
+    });
+    std::array<Matrix, 3> available_kernels({
+        Matrix(5, 5, 0.04), Matrix(3, 3, -1.), Matrix(5, 5, 0.)
+    });
+    available_kernels[1].data[4] = 9.;
+    available_kernels[2].data[0] = 1.; available_kernels[2].data[6] = 1.;
+    available_kernels[2].data[18] = -1.; available_kernels[2].data[24] = -1.;
+
+    if (selected_kernel > 2) {
+        fmt::println(stderr, "Invalid kernel selected - Defaulting to average kernel");
+        fmt::println(stderr, "Available Kernels:");
+        for (size_t i = 0; i < 3; ++i)
+            fmt::println("\t{} - {}", i + 1, available_kernel_names[i]);
+        selected_kernel = 0;
+    }
 
     pnm::pgm_image pgm = pnm::read_pgm_binary(pgm_infilepath);
 
@@ -46,6 +65,7 @@ int main(int argc, char **argv) {
     const size_t num_float_bytes = num_elements * sizeof(float);
 
     fmt::println("Image Properties");
+    fmt::println("----------------");
     fmt::println("\t{:<32} {}", "Input Filepath:", pgm_infilepath);
     fmt::println("\t{:<32} {}", "Serial output filepath:", serial_pgm_out_filepath);
     fmt::println("\t{:<32} {}", "Global output filepath:", global_pgm_out_filepath);
@@ -58,13 +78,18 @@ int main(int argc, char **argv) {
     fmt::println("\t\t{:<24} {:<10.3f}", "(kilobytes / kB):", num_float_bytes / 1000.0);
     fmt::println("\t\t{:<24} {:<10.3f}", "(kibibytes / kiB):", num_float_bytes / 1024.0);
     fmt::println("");
+    fmt::println("Kernel Properties");
+    fmt::println("-----------------");
+    fmt::println("{} {}", "Selected Kernel:", available_kernel_names[selected_kernel]);
+    available_kernels[selected_kernel].print();
+    fmt::println("");
 
     Matrix image_matrix(pgm);
     Matrix serial_convolved_matrix(img_width, img_height, 0.);
     Matrix globalmem_convolved_matrix(img_width, img_height, 0.);
     Matrix sharedmem_convolved_matrix(img_width, img_height, 0.);
 
-    Matrix kernel(5, 5, 0.04);
+    Matrix kernel = available_kernels[selected_kernel];
 
     const size_t block_size = 1024;
     const size_t grid_size = num_elements / block_size + 1;
