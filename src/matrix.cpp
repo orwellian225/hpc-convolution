@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <limits>
+#include <cmath>
 
 #include <cuda_runtime.h>
 #include "pnm.hpp"
@@ -42,30 +43,10 @@ Matrix::Matrix(pnm::pgm_image &pgm) {
 pnm::pgm_image Matrix::to_pnm() {
     pnm::pgm_image result(width, height);
 
-    float max = std::numeric_limits<float>::lowest(), min = std::numeric_limits<float>::max();
-    for (size_t i = 0; i < size; ++i) {
-        if (data[i] > max) {
-            max = data[i];
-        } 
-
-        if (data[i] < min) {
-            min = data[i];
-        }
-    }
-
-    // if the range is in [0, 1], then don't normalize
-    if (max <= 1) {
-        max = 1.;
-    }
-    if (min >= 0.) {
-        min = 0.;
-    }
-
     for (size_t i = 0; i < result.width(); ++i) {
         for (size_t j = 0; j < result.height(); ++j) {
             result[i][j] = (uint8_t)(
-                // (data[j * height + i] * 255)
-                (data[j * height + i] - min) / (max - min) * 255
+                (data[j * height + i] * 255)
             );
         }
     }
@@ -74,9 +55,9 @@ pnm::pgm_image Matrix::to_pnm() {
 }
 
 void Matrix::print() {
-    for (size_t i = 0; i < width; ++i) {
-        for (size_t j = 0; j < height; ++j) {
-            fmt::print("{:+.2f} ", data[j * height + i]);
+    for (size_t j = 0; j < height; ++j) {
+        for (size_t i = 0; i < width; ++i) {
+            fmt::print("{:+.2f} ", data[j * width + i]);
         }
         fmt::println("");
     }
@@ -88,7 +69,7 @@ bool Matrix::equals(Matrix& other, float margin) {
         other_value = other.data[i];
         this_value = this->data[i];
 
-        if ( abs(other_value - this_value) > margin )
+        if ( std::abs(other_value - this_value) > margin )
             return false;
     }
 
