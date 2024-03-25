@@ -89,30 +89,72 @@ __global__ void sharedmem::convolve(Matrix *image, Matrix *kernel, Matrix *resul
     float *kernel_buffer = (float*)(arena);
     float *row_buffer = (float*)(arena) + sizeof(float) * kernel->size;
 
-    if (thread_idx < kernel->size) {
-        kernel_buffer[thread_idx] = kernel->data[thread_idx];
+    // Loading kernel into shared memory
+    if (threadIdx.x < kernel->size) {
+        kernel_buffer[threadIdx.x] = kernel->data[threadIdx.x];
     }
+
+    int32_t image_r = thread_idx / image->width;
+    int32_t image_c = threadIdx.x;
+
+    int32_t rb_width = blockDim.x + kernel->width - 1;
+    int32_t rb_height = kernel->height;
+
+    int32_t kernel_space_around = (int32_t)(kernel->height / 2);
+    for (int32_t copy_r = image_r - kernel_space_around; copy_r <= image_r + kernel_space_around; ++copy_r) {
+        int32_t rb_idx = (copy_r + kernel_space_around) * rb_width + image_c + kernel_space_around; // leave columns before current thread column
+        row_buffer[rb_idx] = 0.;
+    }
+
+    if (threadIdx.x == 0) {
+        for (int32_t copy_c = 0; copy_c < kernel_space_around; ++copy_c) {
+            for (int32_t copy_r = image_r - kernel_space_around; copy_r <= image_r + kernel_space_around; ++copy_r) {
+                int32_t rb_idx = (copy_r + kernel_space_around) * rb_width + copy_c; 
+                row_buffer[rb_idx] = 0.;
+            }
+        }
+    }
+
+    if (threadIdx.x == image->width - 1) {
+        for (int32_t copy_c = image_c + 1; copy_c < image_c + kernel_space_around + 1; ++copy_c) {
+            for (int32_t copy_r = image_r - kernel_space_around; copy_r <= image_r + kernel_space_around; ++copy_r) {
+                int32_t rb_idx = (copy_r + kernel_space_around) * rb_width + copy_c; 
+                row_buffer[rb_idx] = 0.;
+            }
+        }
+    }
+
+    // for (int32_t copy_r = image_r - kernel_space_around; copy_r <= image_r + kernel_space_around; ++copy_r) {
+    //     int32_t fetch_image_idx = copy_r * image->width + image_c;
+    //     int32_t shared_idx = (copy_r + kernel_space_around) * rb_width + (threadIdx.x + kernel_space_around); // leave columns before current thread column
+    // }
+
+    // for (int32_t copy_r = copy_r_start; copy_r <= copy_r_end; ++copy_r) {
+    //     int32_t fetch_image_idx = (image_r + copy_r) * image->width + image_c;
+    //     int32_t shared_idx = (copy_r + copy_r_end) * rb_width + (threadIdx.x + kernel->width / 2); // leave columns before current thread column
+
+    //     if ( -1 < copy_r + image_r && copy_r + image_r < image->height && -1 < image_c && image_c < image->width ) {
+    //         row_buffer[shared_idx] = image->data[fetch_image_idx];
+    //     }
+    // }
 
     __syncthreads();
 
     if (thread_idx >= image->size)
         return;
 
-    size_t r = thread_idx / image->width;
-    size_t c = thread_idx % image->width;
-
     float sum = 0.;
     for (int32_t kernel_r = -(int32_t)(kernel->height / 2); kernel_r <= (int32_t)(kernel->height / 2); ++kernel_r) {
         for (int32_t kernel_c = -(int32_t)(kernel->width / 2); kernel_c <= (int32_t)(kernel->width / 2); ++kernel_c) {
 
-            int32_t kernel_image_r = r + kernel_r;
-            int32_t kernel_image_c = c + kernel_c;
+            int32_t kernel_image_r = image_r + kernel_r;
+            int32_t kernel_image_c = image_c + kernel_c;
 
             int32_t kernel_idx = (kernel_r + kernel->height / 2) * kernel->height + (kernel_c + kernel->width / 2);
             int32_t kernel_image_idx = kernel_image_r * image->width + kernel_image_c;
 
             if ( -1 < kernel_image_r && kernel_image_r < image->height && -1 < kernel_image_c && kernel_image_c < image->width )
-                sum += image->data[kernel_image_idx] * kernel->data[kernel_idx];
+                sum += image->data[kernel_image_idx] * kernel_buffer[kernel_idx];
         }
     }
 
