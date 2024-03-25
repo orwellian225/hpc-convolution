@@ -4,22 +4,11 @@
 #include <pnm.hpp>
 #include <cuda_runtime.h>
 
-#include "auxillary.hpp"
+#include "auxillary.cuh"
 #include "matrix.hpp"
 #include "serial.hpp"
-#include "globalmem.hpp"
-#include "sharedmem.hpp"
-
-void test_serial_convolution(ConvolveMask &kernel);
-
-__global__ void observe_data(PGMRaw* data) {
-    size_t image_idx = blockIdx.x * blockDim.x + threadIdx.x;
-
-    if (image_idx > data->height * data->width)
-        return;
-
-    data->data[image_idx] = 0.0;
-}
+#include "globalmem.cuh"
+#include "sharedmem.cuh"
 
 int main(int argc, char **argv) {
     fmt::println("COMS4040A High Performance Computing Assignment 1");

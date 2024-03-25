@@ -6,7 +6,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 add_subdirectory(lib/fmt)
 
 add_executable(convolution 
-    src/main.cu src/auxillary.cpp 
+    src/main.cu src/auxillary.cu
     src/matrix.cpp
     src/serial.cpp src/globalmem.cu src/sharedmem.cu
 )
@@ -16,7 +16,7 @@ target_link_directories(convolution PRIVATE src PRIVATE lib/fmt/src)
 target_link_libraries(convolution fmt)
 target_compile_options(convolution PRIVATE $<$<COMPILE_LANGUAGE:CUDA>:-G>)
 set_target_properties(convolution PROPERTIES
-    CXX_STANDARD 20
+    CXX_STANDARD 17
     CXX_STANDARD_REQUIRED YES
     CXX_EXTENSIONS NO
 )

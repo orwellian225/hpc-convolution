@@ -1,5 +1,5 @@
-#include "sharedmem.hpp"
-#include "auxillary.hpp"
+#include "sharedmem.cuh"
+#include "auxillary.cuh"
 
 __global__ void sharedmem::convolve(Matrix *image, Matrix *kernel, Matrix *result) {
     int32_t image_idx = blockIdx.x * blockDim.x + threadIdx.x;

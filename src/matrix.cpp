@@ -2,10 +2,11 @@
 #include <limits>
 
 #include <cuda_runtime.h>
+#include "pnm.hpp"
+#include "fmt/core.h"
 
 #include "matrix.hpp"
-#include "pnm.hpp"
-#include "auxillary.hpp"
+#include "auxillary.cuh"
 
 
 Matrix::Matrix() {
