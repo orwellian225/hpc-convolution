@@ -83,10 +83,7 @@ int main(int argc, char **argv) {
 
     size_t block_size = 1024;
     if (img_width < 1024) {
-        if (img_width % 32 == 0)
-            block_size = img_width;
-        else
-            block_size = (img_width / 32) * 32 + 32;
+        block_size = img_width;
     }
 
     const size_t grid_size = num_elements / block_size + 1;
@@ -115,8 +112,8 @@ int main(int argc, char **argv) {
     // Each row is one block (block_size)
     // each row has kernel height rows needed 
     // we need extra columns around ends of row for overlapping data this is kernel width / 2 cells each side per row
-    size_t row_buffer_size = sizeof(float) * (block_size * kernel.height + (kernel.width - 1) * kernel.height);
-    size_t kernel_buffer_size = sizeof(float) * (kernel.size);
+    size_t row_buffer_size = sizeof(float) * block_size * kernel.height;
+    size_t kernel_buffer_size = sizeof(float) * kernel.size;
     cudaEvent_t sharedmem_start, sharedmem_end;    
     cudaEventCreate(&sharedmem_start);
     cudaEventCreate(&sharedmem_end);
