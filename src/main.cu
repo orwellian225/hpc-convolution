@@ -109,10 +109,12 @@ int main(int argc, char **argv) {
     globalmem_convolved_matrix = Matrix::to_host(d_globalmem_matrix);
     cudaEventElapsedTime(&globalmem_duration_ms, globalmem_start, globalmem_end);
 
-    // Each row is one block (block_size)
-    // each row has kernel height rows needed 
-    // we need extra columns around ends of row for overlapping data this is kernel width / 2 cells each side per row
-    size_t row_buffer_size = sizeof(float) * block_size * kernel.height;
+    // I'm getting a really weird bug here:
+    // The amount of request memory is correct
+    // eg. 512x512 image with 5x5 kernel asks for 2560 floats, but I can only access 2524. The 2525 float segfaults?
+    // so to get around this I'm just allocating an additional 100 floats just as a security buffer to avoid the issue
+    // Need to speak to William about this
+    size_t row_buffer_size = sizeof(float) * block_size * kernel.height + sizeof(float) * 100; 
     size_t kernel_buffer_size = sizeof(float) * kernel.size;
     cudaEvent_t sharedmem_start, sharedmem_end;    
     cudaEventCreate(&sharedmem_start);

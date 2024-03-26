@@ -4,9 +4,9 @@
 __global__ void sharedmem::convolve(Matrix *image, Matrix *kernel, Matrix *result) {
     size_t thread_idx = blockIdx.x * blockDim.x + threadIdx.x;
 
-    extern __shared__ uint8_t arena[];
-    float *kernel_buffer = (float*)(arena);
-    float *row_buffer = (float*)(arena) + sizeof(float) * kernel->size;
+    extern __shared__ float arena[];
+    float *kernel_buffer = arena;
+    float *row_buffer = arena + sizeof(float) * kernel->size;
 
     // Loading kernel into shared memory
     if (threadIdx.x < kernel->size) {
@@ -19,9 +19,7 @@ __global__ void sharedmem::convolve(Matrix *image, Matrix *kernel, Matrix *resul
     int32_t image_width = image->width;
 
     int32_t kernel_width = kernel->width;
-
     int32_t rb_width = blockDim.x;
-    int32_t rb_height = kernel->height;
 
     int32_t kernel_center = (int32_t)(kernel->height / 2);
     for (int32_t copy_r = -kernel_center; copy_r <= kernel_center; ++copy_r) {
