@@ -107,6 +107,8 @@ Matrix Matrix::to_host(Matrix *device_matrix) {
         cudaMemcpyDeviceToHost
     ));
 
+    handle_cuda_error(cudaFree(h_data));
+
     return host_matrix;
 }
 
